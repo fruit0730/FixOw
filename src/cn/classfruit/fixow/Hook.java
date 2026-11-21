@@ -474,11 +474,6 @@ public class Hook implements IXposedHookLoadPackage {
                                 View root = g;
                                 ViewParent par;
                                 while ((par = root.getParent()) instanceof View) root = (View) par;
-                                Bitmap base = photoBase();
-                                if (base != null) base = blur(base, blurRadius());
-                                if (base == null) base = wallpaperBlur();
-                                if (base == null) base = frostBase();
-                                root.setBackground(new GlassDrawable(base, 0, glassStyle()));
                                 Drawable clear = new ColorDrawable(0x00000000);
                                 List<View> all = new ArrayList<>();
                                 collectAll(root, all);
@@ -509,10 +504,13 @@ public class Hook implements IXposedHookLoadPackage {
         if (depth > 2) return;
         for (int i = 0; i < g.getChildCount(); i++) {
             View c = g.getChildAt(i);
-            boolean style = c.isClickable();
-            if (!style && c instanceof android.widget.TextView) {
+            boolean style = false;
+            if (c instanceof android.widget.TextView) {
                 CharSequence t = ((android.widget.TextView) c).getText();
-                if (t != null && t.length() > 0 && t.length() <= 3) style = true;
+                if (t != null) {
+                    String s = t.toString().trim();
+                    if (s.length() == 1 && Character.isDigit(s.charAt(0))) style = true;
+                }
             }
             if (style) c.setBackground(new GlassDrawable(null, 28, glassStyle(), true));
             if (c instanceof android.view.ViewGroup) stylePinChildren((android.view.ViewGroup) c, depth + 1);
