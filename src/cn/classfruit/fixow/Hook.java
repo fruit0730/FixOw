@@ -479,12 +479,15 @@ public class Hook implements IXposedHookLoadPackage {
                                 List<View> all = new ArrayList<>();
                                 collectAll(root, all);
                                 for (View cv : all) {
+                                    if (cv.getBackground() instanceof GlassDrawable) continue;
                                     String cn = cv.getClass().getName();
-                                    if (cn.contains("CustomKeyguardPINView")
-                                            || cn.contains("KeyguardSecurityContainer")
-                                            || cn.contains("KeyguardHostView")
-                                            || cn.contains("ColorNumericKeyboard")
-                                            || cn.contains("KeyguardPasswordView")) {
+                                    if (cn.startsWith("com.heytap.wearable.keyguard")
+                                            || cn.equals("android.view.View")
+                                            || cn.equals("android.widget.FrameLayout")
+                                            || cn.equals("android.widget.RelativeLayout")
+                                            || cn.equals("android.widget.LinearLayout")
+                                            || cn.contains("CustomKeyguardPINView")
+                                            || cn.contains("ColorNumericKeyboard")) {
                                         cv.setBackground(clear);
                                     }
                                 }
