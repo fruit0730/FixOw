@@ -48,7 +48,8 @@ public class Hook implements IXposedHookLoadPackage {
     private static final int[] HEALTH_BTNS = {
             0x7f0a0067, 0x7f0a004b, 0x7f0a007d, 0x7f0a0080, 0x7f0a0079};
     private static final String[] HEALTH_BTN_TEXTS = {
-            "测量压力", "查看详情", "助眠冥想", "睡眠模式", "开始测量"};
+            "测量压力", "了解压力", "查看详情", "了解更多", "去了解",
+            "助眠冥想", "睡眠模式", "开始测量"};
     private static WeakReference<View> sLauncherDecor = new WeakReference<>(null);
     private static View sGlobalContainer;
     private static Bitmap sLastWf;
@@ -481,7 +482,9 @@ public class Hook implements IXposedHookLoadPackage {
                                     String cn = cv.getClass().getName();
                                     if (cn.contains("CustomKeyguardPINView")
                                             || cn.contains("KeyguardSecurityContainer")
-                                            || cn.contains("KeyguardHostView")) {
+                                            || cn.contains("KeyguardHostView")
+                                            || cn.contains("ColorNumericKeyboard")
+                                            || cn.contains("KeyguardPasswordView")) {
                                         cv.setBackground(clear);
                                     }
                                 }
