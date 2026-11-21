@@ -470,6 +470,29 @@ public class Hook implements IXposedHookLoadPackage {
                         public void run() {
                             if (!on("fixow_glass_cc")) return;
                             stylePinChildren(g, 0);
+                            try {
+                                View root = g;
+                                ViewParent par;
+                                while ((par = root.getParent()) instanceof View) root = (View) par;
+                                Bitmap base = photoBase();
+                                if (base != null) base = blur(base, blurRadius());
+                                if (base == null) base = wallpaperBlur();
+                                if (base == null) base = frostBase();
+                                root.setBackground(new GlassDrawable(base, 0, glassStyle()));
+                                Drawable clear = new ColorDrawable(0x00000000);
+                                List<View> all = new ArrayList<>();
+                                collectAll(root, all);
+                                for (View cv : all) {
+                                    String cn = cv.getClass().getName();
+                                    if (cn.contains("CustomKeyguardPINView")
+                                            || cn.contains("KeyguardSecurityContainer")
+                                            || cn.contains("KeyguardHostView")) {
+                                        cv.setBackground(clear);
+                                    }
+                                }
+                            } catch (Throwable t) {
+                                XposedBridge.log(t);
+                            }
                             XposedBridge.log("FixOw: keyguard pin glass applied");
                         }
                     }, 400);
