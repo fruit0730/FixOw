@@ -1,0 +1,15 @@
+# build outputs
+gen/
+classes/
+dexout/
+res.zip
+base.apk
+unsigned.apk
+aligned.apk
+FixOw.apk
+*.idsig
+
+# signing material (never commit)
+*.jks
+*.keystore
+ks.jks

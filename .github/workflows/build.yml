@@ -1,0 +1,39 @@
+name: build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Build unsigned APK
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          mkdir -p out
+          "$BT/aapt2" compile --dir res -o out/res.zip
+          "$BT/aapt2" link -o out/base.apk --manifest AndroidManifest.xml -I "$ANDROID_HOME/platforms/android-35/android.jar" --java out/gen -A assets out/res.zip
+          mkdir -p out/classes
+          javac --release 17 -classpath "$ANDROID_HOME/platforms/android-35/android.jar" -sourcepath stubs -d out/classes src/cn/classfruit/fixow/Hook.java src/cn/classfruit/fixow/MainActivity.java out/gen/cn/classfruit/fixow/R.java
+          "$BT/d8" --release --lib "$ANDROID_HOME/platforms/android-35/android.jar" --output out/dex out/classes/cn/classfruit/fixow/*.class
+          python3 - <<'PY'
+          import zipfile
+          zin = zipfile.ZipFile('out/base.apk'); zout = zipfile.ZipFile('out/unsigned.apk', 'w', zipfile.ZIP_DEFLATED)
+          for it in zin.infolist():
+              if it.filename != 'classes.dex':
+                  zout.writestr(it, zin.read(it.filename))
+          zout.write('out/dex/classes.dex', 'classes.dex'); zout.close(); zin.close()
+          PY
+          "$BT/zipalign" -f 4 out/unsigned.apk FixOw-unsigned.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FixOw-unsigned
+          path: FixOw-unsigned.apk
