@@ -474,7 +474,7 @@ public class Hook implements IXposedHookLoadPackage {
                         @Override
                         public void run() {
                             boolean lock = on("fixow_sw_lock");
-                            boolean lockBg = on("fixow_sw_lock_bg");
+                            boolean lockBg = off("fixow_sw_lock_bg");
                             if (!lock && !lockBg) return;
                             if (lock) stylePinChildren(g, 0);
                             try {
@@ -573,6 +573,12 @@ public class Hook implements IXposedHookLoadPackage {
         Context app = app();
         if (app == null) return true;
         return Settings.Secure.getInt(app.getContentResolver(), key, 1) == 1;
+    }
+
+    private static boolean off(String key) {
+        Context app = app();
+        if (app == null) return false;
+        return Settings.Secure.getInt(app.getContentResolver(), key, 0) == 1;
     }
 
     private void hookWhitelist(XC_LoadPackage.LoadPackageParam lp) {

@@ -51,7 +51,7 @@ public class MainActivity extends Activity {
         swVol.setChecked(read("fixow_sw_vol"));
         swGlassHc.setChecked(read("fixow_glass_hc"));
         swLock.setChecked(read("fixow_sw_lock"));
-        swLockBg.setChecked(read("fixow_sw_lock_bg"));
+        swLockBg.setChecked(Settings.Secure.getInt(getContentResolver(), "fixow_sw_lock_bg", 0) == 1);
         swBypass.setOnCheckedChangeListener((b, v) -> write("fixow_bypass", v));
         swIcon.setOnCheckedChangeListener((b, v) -> write("fixow_icon", v));
         swTiles.setOnCheckedChangeListener((b, v) -> write("fixow_sw_tiles", v));
