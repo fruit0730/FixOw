@@ -51,12 +51,19 @@ public class Hook implements IXposedHookLoadPackage {
             "测量压力", "了解压力", "查看详情", "了解更多", "去了解",
             "助眠冥想", "睡眠模式", "开始测量"};
     private static WeakReference<View> sLauncherDecor = new WeakReference<>(null);
-    private static View sGlobalContainer;
     private static Bitmap sLastWf;
     private static Bitmap sBgCache;
     private static int sBgCacheBlur = -1, sBgCacheStyle = -1;
     private static Bitmap sPhotoCache;
-    private static final Map<String, Bitmap> ICONS = new HashMap<>();
+    // 图标缓存必须有上限：原来用无界 HashMap，每个通知过的应用都留一张 ARGB 位图（自适应图标
+    // 转位图约 216×216≈180KB），装得多就能在 SystemUI/Launcher 里堆到几十 MB
+    private static final android.util.LruCache<String, Bitmap> ICONS =
+            new android.util.LruCache<String, Bitmap>(4 * 1024 * 1024) {
+                @Override
+                protected int sizeOf(String key, Bitmap value) {
+                    return value == null ? 0 : value.getAllocationByteCount();
+                }
+            };
     private static boolean sLocked;
 
     @Override
@@ -137,6 +144,8 @@ public class Hook implements IXposedHookLoadPackage {
     }
 
     private static final Paint TILE_PAINT = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private static final Path CLIP_PATH = new Path();
+    private static final RectF CLIP_RECT = new RectF();
 
     private static boolean inStatusPanel(View v) {
         ViewParent p = v.getParent();
@@ -167,11 +176,12 @@ public class Hook implements IXposedHookLoadPackage {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam p) {
                     View v = (View) p.thisObject;
-                    if (!inStatusPanel(v)) return;
+                    // 先查开关：关掉时不再做父链遍历（原来每帧都要 inStatusPanel 走一遍到根）
                     if (!on("fixow_sw_tiles")) {
-                        restoreTile(v);
+                        if (ORIG_CD.containsKey(v) || ORIG_BG.containsKey(v)) restoreTile(v);
                         return;
                     }
+                    if (!inStatusPanel(v)) return;
                     int w = v.getWidth(), h = v.getHeight();
                     if (w <= 0 || h <= 0) return;
                     if (w > h * 1.25f) {
@@ -220,9 +230,9 @@ public class Hook implements IXposedHookLoadPackage {
 
                 @Override
                 protected void afterHookedMethod(MethodHookParam p) {
+                    if (!on("fixow_sw_tiles")) return;
                     View v = (View) p.thisObject;
                     if (!inStatusPanel(v)) return;
-                    if (!on("fixow_sw_tiles")) return;
                     int w = v.getWidth(), h = v.getHeight();
                     if (w <= 0 || h <= 0 || w <= h * 1.25f) return;
                     try {
@@ -238,9 +248,11 @@ public class Hook implements IXposedHookLoadPackage {
                             float r = Math.min(w, h) * 0.22f;
                             Canvas c = (Canvas) p.args[0];
                             int save = c.save();
-                            Path clip = new Path();
-                            clip.addRoundRect(0, 0, w, h, r, r, Path.Direction.CW);
-                            c.clipPath(clip);
+                            // 复用 Path/RectF：这里每帧都 new 会持续产生垃圾并触发 GC
+                            CLIP_RECT.set(0, 0, w, h);
+                            CLIP_PATH.reset();
+                            CLIP_PATH.addRoundRect(CLIP_RECT, r, r, Path.Direction.CW);
+                            c.clipPath(CLIP_PATH);
                             TILE_PAINT.setShader(null);
                             TILE_PAINT.setStyle(Paint.Style.FILL);
                             TILE_PAINT.setColor(0xCCFFFFFF);
@@ -334,6 +346,13 @@ public class Hook implements IXposedHookLoadPackage {
     }
 
     private void hookCardAdd(XC_LoadPackage.LoadPackageParam lp) {
+        // 这是挂在框架基类 android.view.ViewGroup 上的，进程内每一次 addView 都要过一遍
+        // hook 分发（参数装箱 + 回调），是结构性开销里最大的一项。
+        // 因此只在进程启动时开关为开才安装；从关到开需要 Launcher 重启才生效。
+        if (cfg("fixow_sw_notif", 1) != 1) {
+            XposedBridge.log("FixOw: card add hook skipped (switch off at startup)");
+            return;
+        }
         try {
             XposedHelpers.findAndHookMethod("android.view.ViewGroup", lp.classLoader,
                     "addView", View.class, new XC_MethodHook() {
@@ -369,22 +388,8 @@ public class Hook implements IXposedHookLoadPackage {
     }
 
     private void hookGlobalWindow(XC_LoadPackage.LoadPackageParam lp) {
-        try {
-            XposedHelpers.findAndHookMethod("android.view.WindowManagerImpl", lp.classLoader,
-                    "addView", View.class, android.view.ViewGroup.LayoutParams.class, new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam p) {
-                            View v = (View) p.args[0];
-                            if (v.getClass().getName().endsWith("GlobalWindowContainerView")) {
-                                sGlobalContainer = v;
-                                XposedBridge.log("FixOw: global container captured");
-                            }
-                        }
-                    });
-        } catch (Throwable t) {
-            XposedBridge.log("FixOw: global window hook failed");
-            XposedBridge.log(t);
-        }
+        // 这里原本还挂了 android.view.WindowManagerImpl.addView 去抓 GlobalWindowContainerView，
+        // 但那个字段没有任何读取方，却给每次加窗口都加了一次字符串比较和强引用滞留，已删。
         hookPanel(lp, "com.heytap.wearable.launcher.statusbar.view.StatusPanelView");
         hookPanel(lp, "com.heytap.wearable.launcher.notification.view.NotificationPanelView");
     }
@@ -1046,16 +1051,14 @@ public class Hook implements IXposedHookLoadPackage {
     }
 
     private static Bitmap appIcon(String pkg) {
-        synchronized (ICONS) {
-            Bitmap c = ICONS.get(pkg);
-            if (c != null) return c;
-        }
+        Bitmap c = ICONS.get(pkg);
+        if (c != null) return c;
         Context app = app();
         if (app == null || pkg == null) return null;
         try {
             Drawable d = app.getPackageManager().getApplicationIcon(pkg);
             Bitmap b = toBitmap(d);
-            if (b != null) synchronized (ICONS) { ICONS.put(pkg, b); }
+            if (b != null) ICONS.put(pkg, b);
             return b;
         } catch (Throwable t) {
             return null;

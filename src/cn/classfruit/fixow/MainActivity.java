@@ -132,6 +132,7 @@ public class MainActivity extends Activity {
         status.setText("作用域：HeySystemUI（白名单/通知规则/电源菜单）+ Launcher（图标兜底、控制中心玻璃）+ 健康中心。\n"
                 + "「SystemUI 行为」和「玻璃 UI」两组默认全部关闭，打开后下一次事件生效。\n"
                 + "新增 hook 需要 SystemUI/Launcher 重启后才会装载，改完开关若没反应请重启手表。\n"
+                + "例外：「通知中心卡片玻璃」挂在框架 ViewGroup.addView 上，从关到开必须重启 Launcher。\n"
                 + "测试通知不带 largeIcon，用于验证图标兜底。");
     }
 

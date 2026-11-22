@@ -182,7 +182,28 @@ Hook 进程内对 Settings 做了 1 秒缓存（`cfg()`），避免每帧读取�
 
 ## 9. 性能/功耗
 
-无服务、无定时器、无 wakelock；只在亮屏交互产生 CPU。首次打开面板计算一次背景（后台线程+缓存），之后复用；设置读取 1s 缓存；内存缓存为几百 KB 位图。lspd 被杀属于 LSPosed/系统层面，由 `guard` 模块恢复。
+### 实测（OWW221，v2.4 代码已装载，玻璃开关全 0）
+
+测量方法：读 `/proc/<pid>/stat` 的 utime+stime（字段 14/15，先 `sed 's/.*) //'` 再 `cut -f12,13`），窗口内**不调用任何 dumpsys**——`dumpsys gfxinfo <pkg>` 会把目标进程的 RenderThread 叫醒，早期"launcher 静置 660ms/40s"就是测量污染，别信那种数。
+
+| 场景 | launcher | SystemUI | healthcenter | lspd |
+| --- | --- | --- | --- | --- |
+| 息屏静置 40s（Dozing） | 20ms | 10ms | 0ms | **140ms** |
+| 10 次开合控制中心（玻璃全关） | 900ms（≈90ms/次） | 120ms | — | — |
+
+内存（`dumpsys meminfo`，OEM 基线为主）：SystemUI Graphics 1.7MB / RSS 79MB；launcher Graphics 10.3MB / RSS 138MB（表盘 GL 表面）。模块自己的位图缓存合计 <1MB。
+
+**结论：静置≈0，模块不是耗电来源。** `lspd` 那 140ms/40s（≈0.35% CPU）是 LSPosed 常驻的 `logcat` 读取线程（它一直在 tail 全量日志，这台机器的 wifi 驱动每秒刷 dhd 日志也在喂它），属于 LSPosed 底噪，不是 FixOw 的开销，也与我们写多少日志基本无关。
+
+### 代码里已消除的异常开销（v2.5/v2.6）
+
+1. **`LauncherToggleButton.onDraw` 的关闭路径每帧白干**：原来先 `inStatusPanel(v)` 走到根（约 8 层 `getId()`），再查开关，关掉时还要 `restoreTile(v)`。现在顺序改成"先查开关，且只有该 View 确实在快照表里才还原"，关闭态每帧只剩一次 HashMap 查找。
+2. **`android.view.ViewGroup.addView(View)` 是框架级 hook**（launcher 进程内每一次 addView 都要过 LSPosed 分发 + 参数装箱），是结构性开销里最大的一项。改成**启动时开关为开才安装**；代价：从关到开需要 Launcher 重启，模块页面已写明。
+3. **`android.view.WindowManagerImpl.addView` 全局 hook 已删**：它只为抓 `GlobalWindowContainerView` 存进 `sGlobalContainer`，而那个字段**没有任何读取方**——每次加窗口（toast/对话框/IME/面板）都做一次 `getClass().getName().endsWith()` 字符串比较，还把 View 强引用永久留住（潜在泄漏）。
+4. **音量宽卡每帧 `new Path()`**：改为复用静态 `CLIP_PATH`/`CLIP_RECT`，消除持续垃圾与 GC 压力。
+5. **图标缓存无界**：`ICONS` 原来是 `HashMap<String,Bitmap>`，每个发过通知的应用留一张位图（自适应图标转位图约 216×216≈180KB），装得多就能堆到几十 MB。改成 `LruCache`，按 `getAllocationByteCount()` 计，上限 4MB。
+
+无服务、无定时器、无 wakelock；设置读取 1 秒缓存；模糊计算在后台线程并按 blur/style 缓存。
 
 ## 10. 回滚
 
