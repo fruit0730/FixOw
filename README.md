@@ -79,3 +79,8 @@ adb shell pm grant cn.classfruit.fixow android.permission.WRITE_SECURE_SETTINGS
 ## License
 
 MIT
+
+## 交接与维护
+
+- 详细交接文档（环境、hook 清单、配置项、已知坑、回滚、排障）：[docs/HANDOVER.md](docs/HANDOVER.md)
+- Magisk 守护模块源码：[guard/](guard/)
