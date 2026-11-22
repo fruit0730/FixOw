@@ -72,6 +72,7 @@ public class Hook implements IXposedHookLoadPackage {
             hookTiles(lp);
             hookBrightness(lp);
             hookVolumeBar(lp);
+            hookCardAdd(lp);
         } else if (HEALTH.equals(lp.packageName)) {
             hookGlassHealth(lp);
         }
@@ -138,6 +139,18 @@ public class Hook implements IXposedHookLoadPackage {
         return false;
     }
 
+    private static void restoreTile(View v) {
+        int[] cd = ORIG_CD.remove(v);
+        if (cd != null) {
+            try {
+                XposedHelpers.setIntField(v, "c", cd[0]);
+                XposedHelpers.setIntField(v, "d", cd[1]);
+            } catch (Throwable ignored) {
+            }
+        }
+        restoreBg(v);
+    }
+
     private void hookTiles(XC_LoadPackage.LoadPackageParam lp) {
         try {
             Class<?> cls = XposedHelpers.findClass(
@@ -145,16 +158,24 @@ public class Hook implements IXposedHookLoadPackage {
             XposedHelpers.findAndHookMethod(cls, "onDraw", Canvas.class, new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam p) {
-                    if (!on("fixow_sw_tiles")) return;
                     View v = (View) p.thisObject;
                     if (!inStatusPanel(v)) return;
+                    if (!on("fixow_sw_tiles")) {
+                        restoreTile(v);
+                        return;
+                    }
                     int w = v.getWidth(), h = v.getHeight();
                     if (w <= 0 || h <= 0) return;
                     if (w > h * 1.25f) {
                         try {
+                            if (!ORIG_CD.containsKey(v)) {
+                                ORIG_CD.put(v, new int[]{
+                                        XposedHelpers.getIntField(v, "c"),
+                                        XposedHelpers.getIntField(v, "d")});
+                            }
                             XposedHelpers.setIntField(v, "c", 0);
                             XposedHelpers.setIntField(v, "d", 0);
-                            v.setBackground(new GlassDrawable(null, 22, glassStyle(), true));
+                            setGlassBg(v, new GlassDrawable(null, 22, glassStyle(), true));
                             Drawable icon = (Drawable) XposedHelpers.getObjectField(v, "e");
                             if (icon != null) icon.setColorFilter(0xFF15181D,
                                     android.graphics.PorterDuff.Mode.SRC_IN);
@@ -191,9 +212,9 @@ public class Hook implements IXposedHookLoadPackage {
 
                 @Override
                 protected void afterHookedMethod(MethodHookParam p) {
-                    if (!on("fixow_sw_tiles")) return;
                     View v = (View) p.thisObject;
                     if (!inStatusPanel(v)) return;
+                    if (!on("fixow_sw_tiles")) return;
                     int w = v.getWidth(), h = v.getHeight();
                     if (w <= 0 || h <= 0 || w <= h * 1.25f) return;
                     try {
@@ -214,7 +235,7 @@ public class Hook implements IXposedHookLoadPackage {
                             c.clipPath(clip);
                             TILE_PAINT.setShader(null);
                             TILE_PAINT.setStyle(Paint.Style.FILL);
-                            TILE_PAINT.setColor(0x33FFFFFF);
+                            TILE_PAINT.setColor(0xCCFFFFFF);
                             c.drawRect(0, 0, ww, h, TILE_PAINT);
                             c.restoreToCount(save);
                         }
@@ -282,12 +303,15 @@ public class Hook implements IXposedHookLoadPackage {
             XposedHelpers.findAndHookMethod(cls, "onDraw", Canvas.class, new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam p) {
-                    if (!on("fixow_sw_vol")) return;
                     View v = (View) p.thisObject;
+                    if (!on("fixow_sw_vol")) {
+                        restoreBg(v);
+                        return;
+                    }
                     try {
                         android.graphics.drawable.Drawable bg = v.getBackground();
                         if (!(bg instanceof GlassDrawable)) {
-                            v.setBackground(new GlassDrawable(null, 24, glassStyle(), true));
+                            setGlassBg(v, new GlassDrawable(null, 24, glassStyle(), true));
                         }
                     } catch (Throwable t) {
                         XposedBridge.log(t);
@@ -297,6 +321,41 @@ public class Hook implements IXposedHookLoadPackage {
             XposedBridge.log("FixOw: volume bar glass hooked");
         } catch (Throwable t) {
             XposedBridge.log("FixOw: volume bar hook failed");
+            XposedBridge.log(t);
+        }
+    }
+
+    private void hookCardAdd(XC_LoadPackage.LoadPackageParam lp) {
+        try {
+            XposedHelpers.findAndHookMethod("android.view.ViewGroup", lp.classLoader,
+                    "addView", View.class, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam p) {
+                            if (!on("fixow_sw_notif")) return;
+                            View v = (View) p.args[0];
+                            int id = v.getId();
+                            if (id != 0x7f0a008f && id != 0x7f0a0236) return;
+                            ViewParent par = v.getParent();
+                            boolean in = false;
+                            while (par instanceof View) {
+                                View pv = (View) par;
+                                if (pv.getId() == 0x7f0a01af) {
+                                    in = true;
+                                    break;
+                                }
+                                par = pv.getParent();
+                            }
+                            if (!in) return;
+                            if (id == 0x7f0a008f) {
+                                setGlassBg(v, new GlassDrawable(null, 26, glassStyle(), true));
+                            } else {
+                                setGlassBg(v, new ColorDrawable(0x00000000));
+                            }
+                        }
+                    });
+            XposedBridge.log("FixOw: card add hook installed");
+        } catch (Throwable t) {
+            XposedBridge.log("FixOw: card add hook failed");
             XposedBridge.log(t);
         }
     }
@@ -343,29 +402,43 @@ public class Hook implements IXposedHookLoadPackage {
             @Override
             public void run() {
                 try {
-                    View wf = null;
-                    View decor = sLauncherDecor.get();
-                    if (decor != null) wf = decor.findViewById(ID_WATCHFACE);
-                    Bitmap wfBmp = wf == null ? null : snapshot(wf);
-                    if (wfBmp != null) sLastWf = wfBmp;
-                    if (wfBmp == null) wfBmp = sLastWf;
-                    Bitmap base = wfBmp == null ? null : blur(wfBmp, blurRadius());
-                    if (base == null) base = fallbackBase();
                     boolean bg = on("fixow_sw_bg");
                     Drawable clear = new ColorDrawable(0x00000000);
+                    int[] clearIds = {0x7f0a024f, 0x7f0a0274, 0x7f0a0285, 0x7f0a0255};
                     if (bg) {
-                        panel.setBackground(new GlassDrawable(base, 0, glassStyle()));
-                        int[] clearIds = {0x7f0a024f, 0x7f0a0274, 0x7f0a0285, 0x7f0a0255};
+                        View wf = null;
+                        View decor = sLauncherDecor.get();
+                        if (decor != null) wf = decor.findViewById(ID_WATCHFACE);
+                        Bitmap wfBmp = wf == null ? null : snapshot(wf);
+                        if (wfBmp != null) sLastWf = wfBmp;
+                        if (wfBmp == null) wfBmp = sLastWf;
+                        Bitmap base = wfBmp == null ? null : blur(wfBmp, blurRadius());
+                        if (base == null) base = fallbackBase();
+                        setGlassBg(panel, new GlassDrawable(base, 0, glassStyle()));
                         for (int id : clearIds) {
                             View v = panel.findViewById(id);
-                            if (v != null) v.setBackground(clear);
+                            if (v != null) setGlassBg(v, clear);
                         }
                         if (panel instanceof android.view.ViewGroup && panel.getId() == 0x7f0a01af) {
                             android.view.ViewGroup g = (android.view.ViewGroup) panel;
                             for (int i = 0; i < g.getChildCount(); i++) {
                                 View c = g.getChildAt(i);
                                 if (c.getClass().getName().contains("Recycler")) continue;
-                                c.setBackground(clear);
+                                setGlassBg(c, clear);
+                            }
+                        }
+                    } else {
+                        restoreBg(panel);
+                        for (int id : clearIds) {
+                            View v = panel.findViewById(id);
+                            if (v != null) restoreBg(v);
+                        }
+                        if (panel instanceof android.view.ViewGroup && panel.getId() == 0x7f0a01af) {
+                            android.view.ViewGroup g = (android.view.ViewGroup) panel;
+                            for (int i = 0; i < g.getChildCount(); i++) {
+                                View c = g.getChildAt(i);
+                                if (c.getClass().getName().contains("Recycler")) continue;
+                                restoreBg(c);
                             }
                         }
                     }
@@ -374,7 +447,7 @@ public class Hook implements IXposedHookLoadPackage {
                         styleNotification(panel, 400);
                         styleNotification(panel, 1200);
                     }
-                    XposedBridge.log("FixOw: panel glass applied (base=" + (base != null) + ", bg=" + bg + ")");
+                    XposedBridge.log("FixOw: panel glass applied (bg=" + bg + ")");
                 } catch (Throwable t) {
                     XposedBridge.log(t);
                 }
@@ -387,16 +460,22 @@ public class Hook implements IXposedHookLoadPackage {
             @Override
             public void run() {
                 try {
-                    if (!on("fixow_sw_notif")) return;
+                    boolean notif = on("fixow_sw_notif");
                     Drawable clear = new ColorDrawable(0x00000000);
                     List<View> wrappers = new ArrayList<>();
                     collectById(panel, 0x7f0a0236, wrappers);
-                    for (View w : wrappers) w.setBackground(clear);
                     List<View> cards = new ArrayList<>();
                     collectById(panel, 0x7f0a008f, cards);
-                    for (View card : cards) card.setBackground(new GlassDrawable(null, 26, glassStyle(), true));
                     View del = panel.findViewById(0x7f0a0073);
-                    if (del != null) del.setBackground(new GlassDrawable(null, 30, glassStyle(), true));
+                    if (!notif) {
+                        for (View w : wrappers) restoreBg(w);
+                        for (View card : cards) restoreBg(card);
+                        if (del != null) restoreBg(del);
+                        return;
+                    }
+                    for (View w : wrappers) setGlassBg(w, clear);
+                    for (View card : cards) setGlassBg(card, new GlassDrawable(null, 26, glassStyle(), true));
+                    if (del != null) setGlassBg(del, new GlassDrawable(null, 30, glassStyle(), true));
                 } catch (Throwable t) {
                     XposedBridge.log(t);
                 }
@@ -414,7 +493,6 @@ public class Hook implements IXposedHookLoadPackage {
                 @Override
                 protected void afterHookedMethod(MethodHookParam p) {
                     final View pager = (View) p.thisObject;
-                    if (!on("fixow_glass_hc")) return;
                     pager.postDelayed(new Runnable() {
                         @Override
                         public void run() {
@@ -422,12 +500,16 @@ public class Hook implements IXposedHookLoadPackage {
                                 View root = pager;
                                 ViewParent par;
                                 while ((par = root.getParent()) instanceof View) root = (View) par;
+                                if (!on("fixow_glass_hc")) {
+                                    restoreSubtree(root);
+                                    return;
+                                }
                                 Bitmap base = photoBase();
                                 if (base != null) base = blur(base, blurRadius());
                                 if (base == null) base = wallpaperBlur();
                                 if (base == null) base = frostBase();
-                                root.setBackground(new GlassDrawable(base, 34, glassStyle()));
-                                pager.setBackground(null);
+                                setGlassBg(root, new GlassDrawable(base, 34, glassStyle()));
+                                setGlassBg(pager, null);
                                 int bn = applyHealthButtons(pager);
                                 XposedBridge.log("FixOw: health center glass applied (base=" + (base != null) + ", buttons=" + bn + ")");
                             } catch (Throwable t) {
@@ -486,7 +568,7 @@ public class Hook implements IXposedHookLoadPackage {
                                     if (base != null) base = blur(base, blurRadius());
                                     if (base == null) base = wallpaperBlur();
                                     if (base == null) base = frostBase();
-                                    root.setBackground(new GlassDrawable(base, 0, glassStyle()));
+                                    setGlassBg(root, new GlassDrawable(base, 0, glassStyle()));
                                     Drawable clear = new ColorDrawable(0x00000000);
                                     List<View> all = new ArrayList<>();
                                     collectAll(root, all);
@@ -500,9 +582,11 @@ public class Hook implements IXposedHookLoadPackage {
                                                 || cn.equals("android.widget.LinearLayout")
                                                 || cn.contains("CustomKeyguardPINView")
                                                 || cn.contains("ColorNumericKeyboard")) {
-                                            cv.setBackground(clear);
+                                            setGlassBg(cv, clear);
                                         }
                                     }
+                                } else {
+                                    restoreSubtree(root);
                                 }
                             } catch (Throwable t) {
                                 XposedBridge.log(t);
@@ -531,7 +615,7 @@ public class Hook implements IXposedHookLoadPackage {
                     if (s.length() == 1 && Character.isDigit(s.charAt(0))) style = true;
                 }
             }
-            if (style) c.setBackground(new GlassDrawable(null, 28, glassStyle(), true));
+            if (style) setGlassBg(c, new GlassDrawable(null, 28, glassStyle(), true));
             if (c instanceof android.view.ViewGroup) stylePinChildren((android.view.ViewGroup) c, depth + 1);
         }
     }
@@ -842,6 +926,26 @@ public class Hook implements IXposedHookLoadPackage {
         }
     }
 
+    private static final java.util.WeakHashMap<View, Drawable> ORIG_BG = new java.util.WeakHashMap<>();
+    private static final java.util.WeakHashMap<View, int[]> ORIG_CD = new java.util.WeakHashMap<>();
+
+    private static void setGlassBg(View v, Drawable d) {
+        if (!ORIG_BG.containsKey(v)) ORIG_BG.put(v, v.getBackground());
+        v.setBackground(d);
+    }
+
+    private static void restoreBg(View v) {
+        if (ORIG_BG.containsKey(v)) v.setBackground(ORIG_BG.remove(v));
+    }
+
+    private static void restoreSubtree(View root) {
+        restoreBg(root);
+        if (root instanceof android.view.ViewGroup) {
+            android.view.ViewGroup g = (android.view.ViewGroup) root;
+            for (int i = 0; i < g.getChildCount(); i++) restoreSubtree(g.getChildAt(i));
+        }
+    }
+
     private static void collectAll(View v, List<View> out) {
         out.add(v);
         if (v instanceof android.view.ViewGroup) {
@@ -856,7 +960,7 @@ public class Hook implements IXposedHookLoadPackage {
             List<View> l = new ArrayList<>();
             collectById(pager, id, l);
             for (View b : l) {
-                b.setBackground(new GlassDrawable(null, 24, glassStyle(), true));
+                setGlassBg(b, new GlassDrawable(null, 24, glassStyle(), true));
                 n++;
             }
         }
@@ -869,7 +973,7 @@ public class Hook implements IXposedHookLoadPackage {
                 String s = t.toString().trim();
                 for (String want : HEALTH_BTN_TEXTS) {
                     if (s.equals(want)) {
-                        v.setBackground(new GlassDrawable(null, 24, glassStyle(), true));
+                        setGlassBg(v, new GlassDrawable(null, 24, glassStyle(), true));
                         n++;
                         break;
                     }
