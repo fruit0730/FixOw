@@ -334,10 +334,10 @@ public class Hook implements IXposedHookLoadPackage {
                     "addView", View.class, new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam p) {
-                            if (!on("fixow_sw_notif")) return;
                             View v = (View) p.args[0];
                             int id = v.getId();
                             if (id != 0x7f0a008f && id != 0x7f0a0236) return;
+                            if (!on("fixow_sw_notif")) return;
                             ViewParent par = v.getParent();
                             boolean in = false;
                             while (par instanceof View) {
@@ -684,16 +684,41 @@ public class Hook implements IXposedHookLoadPackage {
         }
     }
 
+    private static final String[] CFG_KEYS = {
+            "fixow_bypass", "fixow_icon", "fixow_sw_tiles", "fixow_sw_bg",
+            "fixow_sw_notif", "fixow_sw_detail", "fixow_sw_vol", "fixow_glass_hc",
+            "fixow_sw_lock", "fixow_sw_lock_bg", "fixow_blur", "fixow_style"};
+    private static final java.util.HashMap<String, Integer> CFG = new java.util.HashMap<>();
+    private static long CFG_TS;
+
+    private static int cfg(String key, int def) {
+        long now = android.os.SystemClock.elapsedRealtime();
+        synchronized (CFG) {
+            if (now - CFG_TS > 1000) {
+                Context app = app();
+                if (app != null) {
+                    for (String k : CFG_KEYS) {
+                        int d = k.equals("fixow_sw_lock_bg") ? 0
+                                : (k.equals("fixow_blur") ? 16 : (k.equals("fixow_style") ? 0 : 1));
+                        try {
+                            CFG.put(k, Settings.Secure.getInt(app.getContentResolver(), k, d));
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                }
+                CFG_TS = now;
+            }
+            Integer v = CFG.get(key);
+            return v == null ? def : v;
+        }
+    }
+
     private static boolean on(String key) {
-        Context app = app();
-        if (app == null) return true;
-        return Settings.Secure.getInt(app.getContentResolver(), key, 1) == 1;
+        return cfg(key, 1) == 1;
     }
 
     private static boolean off(String key) {
-        Context app = app();
-        if (app == null) return false;
-        return Settings.Secure.getInt(app.getContentResolver(), key, 0) == 1;
+        return cfg(key, 0) == 1;
     }
 
     private void hookWhitelist(XC_LoadPackage.LoadPackageParam lp) {
@@ -828,7 +853,7 @@ public class Hook implements IXposedHookLoadPackage {
         Context app = app();
         if (app == null) return 16;
         try {
-            return Settings.Secure.getInt(app.getContentResolver(), "fixow_blur", 16);
+            return cfg("fixow_blur", 16);
         } catch (Throwable t) {
             return 16;
         }
@@ -838,7 +863,7 @@ public class Hook implements IXposedHookLoadPackage {
         Context app = app();
         if (app == null) return 0;
         try {
-            return Settings.Secure.getInt(app.getContentResolver(), "fixow_style", 0);
+            return cfg("fixow_style", 0);
         } catch (Throwable t) {
             return 0;
         }
