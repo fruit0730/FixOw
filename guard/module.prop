@@ -1,0 +1,6 @@
+id=fixow_guard
+name=FixOw LSPosed Guard
+version=v1
+versionCode=1
+author=fruit0730
+description=Restart lspd and re-inject FixOw hooks into SystemUI/Launcher/HealthCenter if the daemon gets killed.
