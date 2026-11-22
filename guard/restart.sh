@@ -1,5 +1,5 @@
 #!/system/bin/sh
-for p in $(ps -A -o PID,ARGS | grep '[f]ixow_guard/service.sh' | tr -s ' ' | cut -d' ' -f2); do
+for p in $(ps -A -o PID,ARGS | awk '/[f]ixow_guard\/service.sh/ {print $1}'); do
   [ "$p" = "$$" ] || kill "$p" 2>/dev/null
 done
 sleep 1
