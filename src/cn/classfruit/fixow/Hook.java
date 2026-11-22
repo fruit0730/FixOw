@@ -53,6 +53,9 @@ public class Hook implements IXposedHookLoadPackage {
     private static WeakReference<View> sLauncherDecor = new WeakReference<>(null);
     private static View sGlobalContainer;
     private static Bitmap sLastWf;
+    private static Bitmap sBgCache;
+    private static int sBgCacheBlur = -1, sBgCacheStyle = -1;
+    private static Bitmap sPhotoCache;
     private static final Map<String, Bitmap> ICONS = new HashMap<>();
 
     @Override
@@ -406,15 +409,43 @@ public class Hook implements IXposedHookLoadPackage {
                     Drawable clear = new ColorDrawable(0x00000000);
                     int[] clearIds = {0x7f0a024f, 0x7f0a0274, 0x7f0a0285, 0x7f0a0255};
                     if (bg) {
-                        View wf = null;
-                        View decor = sLauncherDecor.get();
-                        if (decor != null) wf = decor.findViewById(ID_WATCHFACE);
-                        Bitmap wfBmp = wf == null ? null : snapshot(wf);
-                        if (wfBmp != null) sLastWf = wfBmp;
-                        if (wfBmp == null) wfBmp = sLastWf;
-                        Bitmap base = wfBmp == null ? null : blur(wfBmp, blurRadius());
-                        if (base == null) base = fallbackBase();
-                        setGlassBg(panel, new GlassDrawable(base, 0, glassStyle()));
+                        final int br = blurRadius(), st = glassStyle();
+                        if (sBgCache != null && br == sBgCacheBlur && st == sBgCacheStyle) {
+                            setGlassBg(panel, new GlassDrawable(sBgCache, 0, st));
+                        } else {
+                            View wf = null;
+                            View decor = sLauncherDecor.get();
+                            if (decor != null) wf = decor.findViewById(ID_WATCHFACE);
+                            Bitmap shot = wf == null ? null : snapshot(wf);
+                            if (shot != null && isMostlyDark(shot)) shot = null;
+                            if (shot != null) sLastWf = shot;
+                            else shot = sLastWf;
+                            final Bitmap src = shot;
+                            new Thread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    Bitmap base = null;
+                                    try {
+                                        base = src == null ? null : blur(src, br);
+                                    } catch (Throwable ignored) {
+                                    }
+                                    if (base == null) base = fallbackBase();
+                                    final Bitmap fb = base;
+                                    panel.post(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            if (fb == null) return;
+                                            sBgCache = fb;
+                                            sBgCacheBlur = br;
+                                            sBgCacheStyle = st;
+                                            if (on("fixow_sw_bg")) {
+                                                setGlassBg(panel, new GlassDrawable(fb, 0, st));
+                                            }
+                                        }
+                                    });
+                                }
+                            }).start();
+                        }
                         for (int id : clearIds) {
                             View v = panel.findViewById(id);
                             if (v != null) setGlassBg(v, clear);
@@ -814,15 +845,37 @@ public class Hook implements IXposedHookLoadPackage {
     }
 
     private static Bitmap photoBase() {
+        if (sPhotoCache != null) return sPhotoCache;
         Context app = app();
         if (app == null) return null;
         try {
             String s = Settings.Secure.getString(app.getContentResolver(), "fixow_bg");
             if (s == null || s.length() == 0) return null;
             byte[] d = Base64.decode(s, Base64.DEFAULT);
-            return BitmapFactory.decodeByteArray(d, 0, d.length);
+            Bitmap b = BitmapFactory.decodeByteArray(d, 0, d.length);
+            sPhotoCache = b;
+            return b;
         } catch (Throwable t) {
             return null;
+        }
+    }
+
+    private static boolean isMostlyDark(Bitmap b) {
+        try {
+            int w = b.getWidth(), h = b.getHeight();
+            int sx = Math.max(1, w / 8), sy = Math.max(1, h / 8);
+            long sum = 0;
+            int n = 0;
+            for (int y = 0; y < h; y += sy) {
+                for (int x = 0; x < w; x += sx) {
+                    int c = b.getPixel(x, y);
+                    sum += (((c >> 16) & 0xff) + ((c >> 8) & 0xff) + (c & 0xff)) / 3;
+                    n++;
+                }
+            }
+            return n > 0 && (sum / n) < 24;
+        } catch (Throwable t) {
+            return false;
         }
     }
 
