@@ -57,12 +57,17 @@ public class Hook implements IXposedHookLoadPackage {
     private static int sBgCacheBlur = -1, sBgCacheStyle = -1;
     private static Bitmap sPhotoCache;
     private static final Map<String, Bitmap> ICONS = new HashMap<>();
+    private static boolean sLocked;
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lp) {
         if (SYSUI.equals(lp.packageName)) {
             hookWhitelist(lp);
             hookSbnIcon(lp);
+            hookKeyguardState(lp);
+            hookPowerMenu(lp);
+            hookNotifRules(lp);
+            hookSysuiMisc(lp);
             hookDetailCard(lp);
             hookVolumeBar(lp);
             hookKeyguardPin(lp);
@@ -687,7 +692,18 @@ public class Hook implements IXposedHookLoadPackage {
     private static final String[] CFG_KEYS = {
             "fixow_bypass", "fixow_icon", "fixow_sw_tiles", "fixow_sw_bg",
             "fixow_sw_notif", "fixow_sw_detail", "fixow_sw_vol", "fixow_glass_hc",
-            "fixow_sw_lock", "fixow_sw_lock_bg", "fixow_blur", "fixow_style"};
+            "fixow_sw_lock", "fixow_sw_lock_bg", "fixow_blur", "fixow_style",
+            "fixow_pm_nopoweroff",
+            "fixow_pm_shutdown", "fixow_pm_restart", "fixow_pm_smart", "fixow_pm_sos",
+            "fixow_ntf_canpost", "fixow_ntf_nomode", "fixow_ntf_nomute", "fixow_ntf_offwrist",
+            "fixow_ntf_keepopen", "fixow_ntf_stale", "fixow_ntf_nosellclear",
+            "fixow_aod_color", "fixow_norlowbatt"};
+    private static final java.util.Set<String> DEFAULT_ZERO = new java.util.HashSet<>(
+            java.util.Arrays.asList("fixow_sw_lock_bg", "fixow_pm_nopoweroff",
+                    "fixow_pm_shutdown", "fixow_pm_restart",
+                    "fixow_pm_smart", "fixow_pm_sos", "fixow_ntf_canpost", "fixow_ntf_nomode", "fixow_ntf_nomute",
+                    "fixow_ntf_offwrist", "fixow_ntf_keepopen", "fixow_ntf_stale",
+                    "fixow_ntf_nosellclear", "fixow_aod_color", "fixow_norlowbatt"));
     private static final java.util.HashMap<String, Integer> CFG = new java.util.HashMap<>();
     private static long CFG_TS;
 
@@ -698,8 +714,8 @@ public class Hook implements IXposedHookLoadPackage {
                 Context app = app();
                 if (app != null) {
                     for (String k : CFG_KEYS) {
-                        int d = k.equals("fixow_sw_lock_bg") ? 0
-                                : (k.equals("fixow_blur") ? 16 : (k.equals("fixow_style") ? 0 : 1));
+                        int d = k.equals("fixow_blur") ? 16
+                                : (k.equals("fixow_style") ? 0 : (DEFAULT_ZERO.contains(k) ? 0 : 1));
                         try {
                             CFG.put(k, Settings.Secure.getInt(app.getContentResolver(), k, d));
                         } catch (Throwable ignored) {
@@ -734,6 +750,237 @@ public class Hook implements IXposedHookLoadPackage {
         } catch (Throwable t) {
             XposedBridge.log("FixOw: whitelist hook failed");
             XposedBridge.log(t);
+        }
+    }
+
+    private void hookKeyguardState(XC_LoadPackage.LoadPackageParam lp) {
+        // t1.w 是 SystemUI 自己的 KeyguardViewMediator：q(Bundle)=prepareLock 置锁，
+        // r(JJ)=解锁动画清锁，i() 读同一个 h:Z —— 跟着 OEM 状态机走，不额外发 binder 事务
+        try {
+            Class<?> cls = XposedHelpers.findClass("t1.w", lp.classLoader);
+            XposedHelpers.findAndHookMethod(cls, "q", android.os.Bundle.class, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam p) {
+                    sLocked = true;
+                }
+            });
+            XposedHelpers.findAndHookMethod(cls, "r", long.class, long.class, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam p) {
+                    sLocked = false;
+                }
+            });
+            XposedHelpers.findAndHookMethod(cls, "i", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam p) {
+                    Object r = p.getResult();
+                    if (r instanceof Boolean) sLocked = (Boolean) r;
+                }
+            });
+            XposedBridge.log("FixOw: keyguard state tracker hooked");
+        } catch (Throwable t) {
+            XposedBridge.log("FixOw: keyguard state tracker failed");
+            XposedBridge.log(t);
+        }
+    }
+
+    private void hookPowerMenu(XC_LoadPackage.LoadPackageParam lp) {
+        // 电源菜单是 4 个硬编码滑动项（关机/重启/表带模式/紧急呼叫），没有列表适配器可改
+        // 4 个条目各自独立分叉：0=始终显示 1=仅解锁 2=仅锁屏 3=始终隐藏（默认全 0，等于固件原样）
+        try {
+            XposedHelpers.findAndHookMethod("y5.c", lp.classLoader, "show", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam p) {
+                    try {
+                        android.app.Dialog d = (android.app.Dialog) p.thisObject;
+                        if (d.getWindow() == null) return;
+                        final View root = d.getWindow().getDecorView();
+                        applyPowerMenu(root);
+                        // OEM 会在 show 之后再刷一次可见性，排到消息队列尾部补一次
+                        root.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                applyPowerMenu(root);
+                            }
+                        });
+                    } catch (Throwable t) {
+                        XposedBridge.log(t);
+                    }
+                }
+            });
+            XposedBridge.log("FixOw: power menu y5.c.show hooked");
+        } catch (Throwable t) {
+            XposedBridge.log("FixOw: power menu show hook failed");
+            XposedBridge.log(t);
+        }
+        // y5.c.k(Z)V 就是 OEM 自己开关轻智能模式那一行的地方（写 Ly5/c;.o），必须在它之后重刷
+        try {
+            XposedHelpers.findAndHookMethod("y5.c", lp.classLoader, "k", boolean.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam p) {
+                            try {
+                                android.app.Dialog d = (android.app.Dialog) p.thisObject;
+                                if (d.getWindow() != null) applyPowerMenu(d.getWindow().getDecorView());
+                            } catch (Throwable t) {
+                                XposedBridge.log(t);
+                            }
+                        }
+                    });
+            XposedBridge.log("FixOw: power menu y5.c.k hooked");
+        } catch (Throwable t) {
+            XposedBridge.log("FixOw: power menu k hook failed");
+            XposedBridge.log(t);
+        }
+        try {
+            XposedHelpers.findAndHookMethod("y5.p", lp.classLoader, "F", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam p) {
+                    try {
+                        Object dlg = XposedHelpers.getObjectField(p.thisObject, "h");
+                        if (dlg instanceof android.app.Dialog) {
+                            android.view.Window w = ((android.app.Dialog) dlg).getWindow();
+                            if (w != null) applyPowerMenu(w.getDecorView());
+                        }
+                    } catch (Throwable t) {
+                        XposedBridge.log(t);
+                    }
+                }
+            });
+            XposedBridge.log("FixOw: power menu y5.p.F hooked");
+        } catch (Throwable t) {
+            XposedBridge.log("FixOw: power menu F hook failed");
+            XposedBridge.log(t);
+        }
+        // 滑动完成统一走接口 y5.p$a.b(View,boolean)，invoke-interface 不会被 dexpreopt 内联
+        try {
+            XposedHelpers.findAndHookMethod("y5.p$a", lp.classLoader, "b", View.class, boolean.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam p) {
+                            if (!off("fixow_pm_nopoweroff")) return;
+                            try {
+                                Object tag = ((View) p.args[0]).getTag();
+                                if (tag != null && "shutdown".equals(tag.toString())) {
+                                    p.setResult(null);
+                                    XposedBridge.log("FixOw: shutdown action blocked");
+                                }
+                            } catch (Throwable t) {
+                                XposedBridge.log(t);
+                            }
+                        }
+                    });
+            XposedBridge.log("FixOw: power action dispatcher hooked");
+        } catch (Throwable t) {
+            XposedBridge.log("FixOw: power action hook failed");
+            XposedBridge.log(t);
+        }
+    }
+
+    private void hookNotifRules(XC_LoadPackage.LoadPackageParam lp) {
+        gate(lp, "com.heytap.wearable.systemui.notification.data.local.LocalNotificationService",
+                "f", "fixow_ntf_canpost", true, false, StatusBarNotification.class);
+        gate(lp, "p5.g", "b", "fixow_ntf_nomode", new boolean[]{true, true, true}, false,
+                Notification.class, String.class);
+        gate(lp, "x4.g", "x", "fixow_ntf_nomute", false, false, Notification.class);
+        gate(lp, "y2.b", "c", "fixow_ntf_offwrist", false, false);
+        try {
+            Class<?> item = XposedHelpers.findClass(
+                    "com.heytap.wearable.systemui.notification.sdk.bean.NotificationItem", lp.classLoader);
+            gate(lp, "com.heytap.wearable.systemui.notification.manager.r", "l",
+                    "fixow_ntf_stale", false, false, item);
+        } catch (Throwable t) {
+            XposedBridge.log("FixOw: stale gate skipped");
+        }
+        gate(lp, "com.heytap.wearable.systemui.notification.receiver.SellModeReceiver", "onReceive",
+                "fixow_ntf_nosellclear", null, true, Context.class, android.content.Intent.class);
+    }
+
+    private void hookSysuiMisc(XC_LoadPackage.LoadPackageParam lp) {
+        gate(lp, "g4.e", "h", "fixow_ntf_keepopen", null, true);
+        gate(lp, "r1.a", "e", "fixow_aod_color", true, false, Context.class);
+        try {
+            XposedHelpers.findAndHookMethod(
+                    "com.heytap.wearable.keyguard.charge.LowBatteryAutoSwitchRsModeView",
+                    lp.classLoader, "onAttachedToWindow", new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam p) {
+                            if (!off("fixow_norlowbatt")) return;
+                            try {
+                                ((View) p.thisObject).setVisibility(View.GONE);
+                                XposedBridge.log("FixOw: low battery prompt hidden");
+                            } catch (Throwable t) {
+                                XposedBridge.log(t);
+                            }
+                        }
+                    });
+            XposedBridge.log("FixOw: low battery view hooked");
+        } catch (Throwable t) {
+            XposedBridge.log("FixOw: low battery hook failed");
+            XposedBridge.log(t);
+        }
+    }
+
+    /** mode: 0=始终显示 1=仅解锁显示 2=仅锁屏显示 3=始终隐藏 */
+    private static boolean show(int mode, boolean locked) {
+        switch (mode) {
+            case 1:
+                return !locked;
+            case 2:
+                return locked;
+            case 3:
+                return false;
+            default:
+                return true;
+        }
+    }
+
+    private static void applyPowerMenu(View root) {
+        if (root == null) return;
+        int off = cfg("fixow_pm_shutdown", 0), rst = cfg("fixow_pm_restart", 0);
+        int smt = cfg("fixow_pm_smart", 0), sos = cfg("fixow_pm_sos", 0);
+        if ((off | rst | smt | sos) == 0) return;   // 全默认：完全不碰
+        boolean locked = sLocked;
+        setRow(root, 0x7f0901e3, show(off, locked));
+        setRow(root, 0x7f0901e1, show(rst, locked));
+        setRow(root, 0x7f0901e5, show(smt, locked));
+        setRow(root, 0x7f0901e4, show(sos, locked));
+        XposedBridge.log("FixOw: power menu rows off=" + off + " rst=" + rst + " smt=" + smt
+                + " sos=" + sos + " locked=" + locked);
+    }
+
+    // 每个条目都有固定高度的外层壳，只藏里面的按钮和图标会留下空位，所以收起 slide 的父容器
+    private static void setRow(View root, int slideId, boolean visible) {
+        View s = root.findViewById(slideId);
+        if (s == null) return;
+        ViewParent par = s.getParent();
+        if (!(par instanceof View)) return;
+        int v = visible ? View.VISIBLE : View.GONE;
+        View row = (View) par;
+        if (row.getVisibility() != v) row.setVisibility(v);
+    }
+
+    /** 按开关改写目标方法的返回值；before=true 时连原方法一起跳过（void 方法传 forced=null）。 */
+    private void gate(XC_LoadPackage.LoadPackageParam lp, String cls, String method, final String key,
+                      final Object forced, final boolean before, Class<?>... params) {
+        Object[] args = new Object[params.length + 1];
+        System.arraycopy(params, 0, args, 0, params.length);
+        args[params.length] = new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam p) {
+                if (before && off(key)) p.setResult(forced);
+            }
+
+            @Override
+            protected void afterHookedMethod(MethodHookParam p) {
+                if (!before && off(key)) p.setResult(forced);
+            }
+        };
+        try {
+            XposedHelpers.findAndHookMethod(cls, lp.classLoader, method, args);
+            XposedBridge.log("FixOw: gate " + key + " -> " + cls + "." + method);
+        } catch (Throwable t) {
+            XposedBridge.log("FixOw: gate " + key + " failed (" + cls + "." + method + ")");
         }
     }
 

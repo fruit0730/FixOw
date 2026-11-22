@@ -63,6 +63,21 @@ public class MainActivity extends Activity {
         swLock.setOnCheckedChangeListener((b, v) -> write("fixow_sw_lock", v));
         swLockBg.setOnCheckedChangeListener((b, v) -> write("fixow_sw_lock_bg", v));
 
+        bind0(R.id.sw_ntf_canpost, "fixow_ntf_canpost");
+        bind0(R.id.sw_ntf_nomode, "fixow_ntf_nomode");
+        bind0(R.id.sw_ntf_nomute, "fixow_ntf_nomute");
+        bind0(R.id.sw_ntf_offwrist, "fixow_ntf_offwrist");
+        bind0(R.id.sw_ntf_keepopen, "fixow_ntf_keepopen");
+        bind0(R.id.sw_ntf_stale, "fixow_ntf_stale");
+        bind0(R.id.sw_ntf_nosellclear, "fixow_ntf_nosellclear");
+        bind0(R.id.sw_pm_nopoweroff, "fixow_pm_nopoweroff");
+        bindCycle(R.id.btn_pm_shutdown, "fixow_pm_shutdown", getString(R.string.btn_pm_shutdown));
+        bindCycle(R.id.btn_pm_restart, "fixow_pm_restart", getString(R.string.btn_pm_restart));
+        bindCycle(R.id.btn_pm_smart, "fixow_pm_smart", getString(R.string.btn_pm_smart));
+        bindCycle(R.id.btn_pm_sos, "fixow_pm_sos", getString(R.string.btn_pm_sos));
+        bind0(R.id.sw_aod_color, "fixow_aod_color");
+        bind0(R.id.sw_norlowbatt, "fixow_norlowbatt");
+
         seedBg();
 
         Button btnBg = findViewById(R.id.btn_bg);
@@ -114,10 +129,44 @@ public class MainActivity extends Activity {
         test.setOnClickListener(v -> fireTest());
 
         TextView status = findViewById(R.id.tv_status);
-        status.setText("作用域：HeySystemUI（白名单闸门 w4.y.b）+ Launcher（图标兜底、控制中心玻璃）+ 健康中心。\n"
-                + "控制中心用表盘做模糊底；取不到表盘的页面（健康中心等）用所选照片做模糊底。\n"
-                + "开关即时生效于下一次通知投递；已挂出的卡片需重投或重启 SystemUI/Launcher。\n"
+        status.setText("作用域：HeySystemUI（白名单/通知规则/电源菜单）+ Launcher（图标兜底、控制中心玻璃）+ 健康中心。\n"
+                + "「SystemUI 行为」和「玻璃 UI」两组默认全部关闭，打开后下一次事件生效。\n"
+                + "新增 hook 需要 SystemUI/Launcher 重启后才会装载，改完开关若没反应请重启手表。\n"
                 + "测试通知不带 largeIcon，用于验证图标兜底。");
+    }
+
+    private static final String[] PM_MODES = {"始终显示", "仅解锁显示", "仅锁屏显示", "始终隐藏"};
+
+    private void bindCycle(int id, final String key, final String label) {
+        final Button b = findViewById(id);
+        b.setText(label + PM_MODES[readInt(key, 0)]);
+        b.setOnClickListener(v -> {
+            int m = (readInt(key, 0) + 1) % PM_MODES.length;
+            writeInt(key, m);
+            b.setText(label + PM_MODES[m]);
+        });
+    }
+
+    private int readInt(String key, int def) {
+        try {
+            return Settings.Secure.getInt(getContentResolver(), key, def);
+        } catch (Throwable t) {
+            return def;
+        }
+    }
+
+    private void writeInt(String key, int v) {
+        try {
+            Settings.Secure.putInt(getContentResolver(), key, v);
+        } catch (SecurityException e) {
+            toastPerm();
+        }
+    }
+
+    private void bind0(int id, String key) {
+        Switch sw = findViewById(id);
+        sw.setChecked(Settings.Secure.getInt(getContentResolver(), key, 0) == 1);
+        sw.setOnCheckedChangeListener((b, v) -> write(key, v));
     }
 
     private void updateStyleLabel() {

@@ -4,7 +4,9 @@
 
 ## 0. 一句话
 
-FixOw 是一个 LSPosed 模块（包名 `cn.classfruit.fixow`）：解除 HeySystemUI 的通知包名白名单、给缺图标的通知补应用图标，并把控制中心/通知/音量/健康中心/锁屏等界面改成 X2 风格白玻璃；所有玻璃项都有独立开关。
+FixOw 是一个 LSPosed 模块（包名 `cn.classfruit.fixow`）：解除 HeySystemUI 的通知包名白名单、给缺图标的通知补应用图标，把控制中心/通知/音量/健康中心/锁屏等界面改成 X2 风格白玻璃，另有一组 SystemUI 行为定制（电源菜单逐条目分叉、勿扰/运动模式拦截、静音位、AOD、卖场模式等）；每一项都有独立开关。
+
+**当前设备状态（2026-11-22 用户要求）**：玻璃 UI 全部开关已置 0、Magisk 守护模块已放 `disable` 且循环已 kill，只保留通知白名单 + 图标兜底。理由是避免主动重启 SystemUI 触发 OEM 看门狗。模块版本 v2.4（versionCode 6）。
 
 仓库：https://github.com/fruit0730/FixOw （MIT）
 
@@ -72,6 +74,7 @@ LSPosed 把启用状态存 `/data/adb/lspd/config/modules_config.db`（WAL 模�
 - 每 60s `pidof lspd`，缺失则启动 LSPosed daemon，等待 6s 后 kill SystemUI/Launcher/HealthCenter，让它们重启并重新注入 hook（LSPosed 只在进程启动时注入）。
 - 平时开销≈每分钟一次 pidof；只恢复，不阻止被杀。
 - 关闭：`touch /data/adb/modules/fixow_guard/disable` 后重启，或 `pkill -f fixow_guard/service.sh`；删除目录即卸载。
+- **当前设备状态：已放 `disable` 并 kill 循环**（2026-11-22 用户要求"免得崩 systemui"）。主动 kill UI 进程会让 OEM 看门狗有机会累积成整机重启（`ro.boot.bootreason=reboot,systemui_reboot` 也可能是用户自己用电源菜单「重启」产生的，两者要区分：`y5.p.C()` 调 `IPowerManager.reboot(false,"systemui_reboot",false)`，所以这个 bootreason 本身不代表崩溃）。
 
 ## 6. Hook 清单
 
@@ -84,6 +87,18 @@ LSPosed 把启用状态存 `/data/adb/lspd/config/modules_config.db`（WAL 模�
 | `e5.c.G(Context)` | 通知详情卡：`layout_card` 玻璃、`view_bg` 透明、按钮玻璃 | `fixow_sw_detail` |
 | `VolumeSeekBar.onDraw` | 音量弹层：只设玻璃背景，不拦截原绘制 | `fixow_sw_vol` |
 | `ColorNumericKeyboard.a(Context)` | 锁屏 PIN：数字键玻璃；可选模糊背景 | `fixow_sw_lock` / `fixow_sw_lock_bg` |
+| `t1.w.q(Bundle)` / `t1.w.r(JJ)` / `t1.w.i()Z` | 跟踪锁屏状态写进 `sLocked`（q=prepareLock 置锁，r=解锁动画清锁，i() 读同一 `h:Z` 字段）；纯进程内，不发 binder | — |
+| `y5.c.show()V` + `y5.c.k(Z)V` + `y5.p.F()V` | 电源菜单逐条目分叉：收起 `slide_*.getParent()`（固定高度的条目外壳），并在 OEM 自己刷完可见性后重刷 + `post()` 补刷 | `fixow_pm_shutdown/restart/smart/sos` |
+| `y5.p$a.b(View,Z)V` | 滑动完成统一分发（invoke-interface，不会被 dexpreopt 内联）；tag=="shutdown" 时 SKIP，关机动作不执行 | `fixow_pm_nopoweroff` |
+| `LocalNotificationService.f(SBN)Z` | canPost 总闸强制 true，连 `notification_forbidden_list` 黑名单一起绕开 | `fixow_ntf_canpost` |
+| `p5.g.b(Notification,String)[Z` | 模式拦截总闸，返回 `{display,vibrate,sound}`；强制 `{true,true,true}` 一次解掉勿扰/睡眠/运动/锁屏/学校模式 | `fixow_ntf_nomode` |
+| `x4.g.x(Notification)Z` | `notification_flag & 0x10000000` 静音位判定，返回 false = 无视静音 | `fixow_ntf_nomute` |
+| `y2.b.c()Z` | 摘腕状态；返回 false = 摘腕也照常提醒 | `fixow_ntf_offwrist` |
+| `g4.e.h()V` | AOD 横幅 10s 显示超时的派发；SKIP = 不自动收起 | `fixow_ntf_keepopen` |
+| `notification.manager.r.l(NotificationItem)Z` | 「接收超过 10s」判定；返回 false = 旧通知仍可显示 | `fixow_ntf_stale` |
+| `SellModeReceiver.onReceive(Context,Intent)` | 卖场模式清空全部通知；SKIP = 不清 | `fixow_ntf_nosellclear` |
+| `r1.a.e(Context)Z` | `hasSystemFeature("oplus.wear.colorful.aod.support")`；返回 true = 强开彩色 AOD | `fixow_aod_color` |
+| `LowBatteryAutoSwitchRsModeView.onAttachedToWindow()` | 低电量自动进轻智能模式的提示页；attach 后置 GONE | `fixow_norlowbatt` |
 
 ### Launcher（com.heytap.wearable.launcher）
 
@@ -125,6 +140,22 @@ LSPosed 把启用状态存 `/data/adb/lspd/config/modules_config.db`（WAL 模�
 | `fixow_bg` | 内置图 | 背景照片（Base64 JPEG，189×248） |
 | `fixow_blur` | 16 | 模糊强度 0–24 |
 | `fixow_style` | 0 | 0 浅色 / 1 深色 / 2 极简 |
+| `fixow_pm_shutdown` | 0 | 电源菜单「关机」：0 始终显示 / 1 仅解锁 / 2 仅锁屏 / 3 始终隐藏 |
+| `fixow_pm_restart` | 0 | 同上，「重启」 |
+| `fixow_pm_smart` | 0 | 同上，「轻智能模式」（`lightweight_smart_mode`，代码里叫 wristband） |
+| `fixow_pm_sos` | 0 | 同上，「紧急呼叫」 |
+| `fixow_pm_nopoweroff` | **0** | 滑动到关机也不执行关机动作 |
+| `fixow_ntf_canpost` | **0** | canPost 全放行（含系统黑名单） |
+| `fixow_ntf_nomode` | **0** | 勿扰/睡眠/运动/锁屏不再拦截横幅与振动铃声 |
+| `fixow_ntf_nomute` | **0** | 无视静音标记 |
+| `fixow_ntf_offwrist` | **0** | 摘腕仍提醒 |
+| `fixow_ntf_keepopen` | **0** | AOD 横幅不 10s 自动收起 |
+| `fixow_ntf_stale` | **0** | 超过 10s 的旧通知仍可显示 |
+| `fixow_ntf_nosellclear` | **0** | 卖场模式不清空通知 |
+| `fixow_aod_color` | **0** | 强开彩色 AOD |
+| `fixow_norlowbatt` | **0** | 低电量进轻智能模式的提示不弹 |
+
+电源菜单四个条目在 UI 上是**循环按钮**（点一下换一档，值 0–3），不是开关；其余新增项是开关，**全部默认 0（关闭）**，玻璃 UI 那组也默认关闭。
 
 Hook 进程内对 Settings 做了 1 秒缓存（`cfg()`），避免每帧读取。
 
@@ -142,6 +173,12 @@ Hook 进程内对 Settings 做了 1 秒缓存（`cfg()`），避免每帧读取�
 10. **adb 自动化注意**：`input` 注入偶发 `INJECT_EVENTS permission`；设备会自动锁屏/息屏，`screencap` 前先 `KEYCODE_WAKEUP`，PIN 页用 BACK+HOME 退出。
 11. **程序列表（`id_app_list_view_3d`）是 GL/3D 表面**，View 层插不进背景，无法做模糊（Xposed 层上限）。
 12. **X2 桌面 APK 无法安装**：与现有桌面同包名同签名（WearTeam），但 ColorOS 的 `persist.sys.oplus.install` 核心应用校验直接拒绝：`INSTALL_FAILED_ALREADY_EXISTS: forbid install core app`。改属性也无效（这台 services 逻辑不同）。Magisk 覆盖方案被用户否决，改为逐屏仿制。
+13. **电源菜单没有列表适配器**：4 个条目是 `y5.c` 里硬编码的 `SlideButton`+`ImageView`，且每个条目外面套一层**固定高度**的壳（`layout_height=@dimen`）。只藏 `slide_*`/`iv_*` 会留下空位、后面的条目不补位——必须藏 `slide_*.getParent()`。注意关机/重启**各有各的壳**（早期误判成共享容器 `0x7f090122`，那个其实是标题/占位区）。
+14. **OEM 会在 `show()` 之后重刷轻智能那行**：`y5.c.k(Z)V` 直接对 `Ly5/c;.o`（=`layout_wristband`）`setVisibility(0/8)`，由 `y5.p.F()V` 调用。只 hook `show()` 的话我们的 GONE 会被覆盖回去（用户实测"轻智能无法隐藏"就是这个）。现在 `show()` / `k(Z)V` / `F()V` 三处都重刷，并在 decor 上 `post()` 到消息队列尾部再补一次。
+15. **`KEY_CONFIRM` 不是锁屏标志**：`ShutdownActivity.onCreate` 用它决定"要不要弹这个菜单"——为 false 时直接起静默关机线程并 `finish()`，所以菜单能出现时它必然为 true。锁屏状态要用 SystemUI 自己的 `t1.w`（KeyguardViewMediator）字段 `h:Z`：`q(Bundle)`=prepareLock 置 true、`r(JJ)`=解锁动画置 false、`i()Z` 读同一字段。
+16. **别 hook `public final` + invoke-virtual 的方法**：HeySystemUI 是系统应用，可能被 dexpreopt 内联，hook 会静默不生效。`y5.p.C/D/E`、`y5.c.e..i` 都是这种。可靠选择：非-final 方法（`y5.c.show/k/p`）、接口实现（`y5.p$a.b(View,Z)V`，invoke-interface 必命中）、静态纯函数（`a3.r.p`、`x4.g.x`、`p5.g.b`、`r1.a.e`、`y2.b.c`）。
+17. **资源 id 以 `aapt dump resources` 为准**：`layout_sos=0x7f090148`、`layout_wristband=0x7f09014a`（早期笔记把两者写反过）；`slide_shutdown=0x7f0901e3`、`slide_reboot=0x7f0901e1`、`slide_wristband=0x7f0901e5`、`slide_sos=0x7f0901e4`，图标 `iv_*` 依次 `0x7f090133/0x7f090130/0x7f09013c/0x7f090134`。
+18. **新增 hook 只在进程启动时装载**：`install -r` 之后要等 SystemUI/Launcher 自然重启（重启手表最稳），不要主动 kill（见 §5）。lspd 自己会监听重装并同步 `modules.apk_path`，本机验证过无需手改 DB。
 
 ## 9. 性能/功耗
 
@@ -172,4 +209,15 @@ $ADB pull //data/local/tmp/s.png
 - 程序栏（GL 3D）背景无法处理。
 - 通知详情（SystemUI `SysUI.NormalNotification`）已挂卡片玻璃，但"查看详情/关闭"按钮那一版布局未单独适配。
 - 部分健康中心自绘按钮（非文字按钮）未覆盖。
-- 系统升级后需按新 dex 重新核对混淆类名/字段（`w4.y`、`e5.c`、`u5.b`、`LauncherToggleButton` 等）。
+- 系统升级后需按新 dex 重新核对混淆类名/字段（`w4.y`、`e5.c`、`u5.b`、`LauncherToggleButton`、`y5.c`/`y5.p`、`p5.g`、`x4.g`、`t1.w` 等）。
+
+### 固件层面做不到（已用 dexdump 全文核实，别再试）
+
+- **锁屏上的"紧急呼叫"入口不存在**：全 HeySystemUI dex 里 `CALL_EMERGENCY` 只出现在电源菜单 `y5.p.B()`；`launcher.dex.txt` 里 `emergency` 命中数 0；`keyguard.*` 类里没有任何通知/紧急呼叫 UI。
+- **SystemUI 不绘制状态栏图标**：dex 里没有 `StatusBar*`/`IconView`/`Panel`/`Shade` 类，`setViewVisibility` 命中 0。信号/WiFi/NFC/电量都在 launcher（`status_bar_top`、`signal_strength`、`iv_wifi`、`nfc_view`、`battery`），要动图标只能进 launcher 进程。
+- **通知条数上限（30）改不了**：`const/16 v6, #int 30` 内联在 `i4.k.Z()` 里，那方法 262 条指令且持 `monitor-enter/exit`，整段替换必崩。
+- **"2 分钟以上旧通知丢弃"改不了**：`Lw4/e;.b:J` 是 `public static final`，读取方式是 `sget-wide`（没有方法边界），Xposed 写不了 final static。
+- **heads-up 时长没有本机常量**：由手机下发 `NotificationExtendPush.getShowDuration()` → `setExpiredTime`；本机只有 AOD 的 10000ms 超时（`g4.c.b()`）和 10s 新鲜度（`manager.r.l()`）两处，已分别做成开关。
+- **抬手亮屏不在 SystemUI**：无 raise/lift/tilt/palm 相关键或方法，只有 `y2.b` 戴/摘腕状态与 `debug.force.wrist` 属性。
+- **锁屏通知正文隐私/锁屏禁止下拉**：dex 里 `NotificationVisibility`/`showPublic`/`redact`/`VISIBILITY_SECRET` 命中 0，keyguard 视图树里没有通知容器；面板归 launcher，SystemUI 侧无从下手。
+- `sLocked` 初值是"未锁"：开机后若 SystemUI 还没跑过一次锁/解锁就长按电源键，会看到完整 4 项——状态未知时宁可不改，也不乱裁菜单。

@@ -24,6 +24,14 @@
             android:text="@string/subtitle"
             android:textSize="12sp" />
 
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
+            android:text="@string/hdr_notif"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
         <Switch
             android:id="@+id/sw_bypass"
             android:layout_width="match_parent"
@@ -38,6 +46,140 @@
             android:layout_marginTop="8dp"
             android:text="@string/sw_icon"
             android:textSize="15sp" />
+
+        <Switch
+            android:id="@+id/sw_ntf_canpost"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_ntf_canpost"
+            android:textSize="15sp" />
+
+        <Switch
+            android:id="@+id/sw_ntf_nomode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_ntf_nomode"
+            android:textSize="15sp" />
+
+        <Switch
+            android:id="@+id/sw_ntf_nomute"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_ntf_nomute"
+            android:textSize="15sp" />
+
+        <Switch
+            android:id="@+id/sw_ntf_offwrist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_ntf_offwrist"
+            android:textSize="15sp" />
+
+        <Switch
+            android:id="@+id/sw_ntf_keepopen"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_ntf_keepopen"
+            android:textSize="15sp" />
+
+        <Switch
+            android:id="@+id/sw_ntf_stale"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_ntf_stale"
+            android:textSize="15sp" />
+
+        <Switch
+            android:id="@+id/sw_ntf_nosellclear"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_ntf_nosellclear"
+            android:textSize="15sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="4dp"
+            android:text="@string/hdr_sysui"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="4dp"
+            android:text="@string/hdr_pm"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btn_pm_shutdown"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/btn_pm_shutdown"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btn_pm_restart"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/btn_pm_restart"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btn_pm_smart"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/btn_pm_smart"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btn_pm_sos"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/btn_pm_sos"
+            android:textSize="14sp" />
+
+        <Switch
+            android:id="@+id/sw_pm_nopoweroff"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_pm_nopoweroff"
+            android:textSize="15sp" />
+
+        <Switch
+            android:id="@+id/sw_aod_color"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_aod_color"
+            android:textSize="15sp" />
+
+        <Switch
+            android:id="@+id/sw_norlowbatt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_norlowbatt"
+            android:textSize="15sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="4dp"
+            android:text="@string/hdr_glass"
+            android:textSize="14sp"
+            android:textStyle="bold" />
 
         <Switch
             android:id="@+id/sw_tiles"
