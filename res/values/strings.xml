@@ -5,6 +5,12 @@
     <string name="sw_bypass">解除通知白名单</string>
     <string name="sw_icon">补全通知图标（应用图标兜底）</string>
     <string name="sw_glass_cc">控制中心液态玻璃（高斯模糊）</string>
+    <string name="sw_tiles">控制中心磁贴玻璃</string>
+    <string name="sw_bg">面板模糊背景</string>
+    <string name="sw_notif">通知中心卡片玻璃</string>
+    <string name="sw_detail">通知详情卡片玻璃</string>
+    <string name="sw_vol">音量条玻璃</string>
+    <string name="sw_lock">锁屏键盘玻璃</string>
     <string name="sw_glass_hc">健康中心液态玻璃（高斯模糊）</string>
     <string name="btn_test">发送测试通知</string>
     <string name="btn_bg">选择背景照片</string>

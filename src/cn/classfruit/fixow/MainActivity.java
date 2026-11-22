@@ -34,16 +34,31 @@ public class MainActivity extends Activity {
 
         Switch swBypass = findViewById(R.id.sw_bypass);
         Switch swIcon = findViewById(R.id.sw_icon);
-        Switch swGlassCc = findViewById(R.id.sw_glass_cc);
+        Switch swTiles = findViewById(R.id.sw_tiles);
+        Switch swBg = findViewById(R.id.sw_bg);
+        Switch swNotif = findViewById(R.id.sw_notif);
+        Switch swDetail = findViewById(R.id.sw_detail);
+        Switch swVol = findViewById(R.id.sw_vol);
         Switch swGlassHc = findViewById(R.id.sw_glass_hc);
+        Switch swLock = findViewById(R.id.sw_lock);
         swBypass.setChecked(read("fixow_bypass"));
         swIcon.setChecked(read("fixow_icon"));
-        swGlassCc.setChecked(read("fixow_glass_cc"));
+        swTiles.setChecked(read("fixow_sw_tiles"));
+        swBg.setChecked(read("fixow_sw_bg"));
+        swNotif.setChecked(read("fixow_sw_notif"));
+        swDetail.setChecked(read("fixow_sw_detail"));
+        swVol.setChecked(read("fixow_sw_vol"));
         swGlassHc.setChecked(read("fixow_glass_hc"));
+        swLock.setChecked(read("fixow_sw_lock"));
         swBypass.setOnCheckedChangeListener((b, v) -> write("fixow_bypass", v));
         swIcon.setOnCheckedChangeListener((b, v) -> write("fixow_icon", v));
-        swGlassCc.setOnCheckedChangeListener((b, v) -> write("fixow_glass_cc", v));
+        swTiles.setOnCheckedChangeListener((b, v) -> write("fixow_sw_tiles", v));
+        swBg.setOnCheckedChangeListener((b, v) -> write("fixow_sw_bg", v));
+        swNotif.setOnCheckedChangeListener((b, v) -> write("fixow_sw_notif", v));
+        swDetail.setOnCheckedChangeListener((b, v) -> write("fixow_sw_detail", v));
+        swVol.setOnCheckedChangeListener((b, v) -> write("fixow_sw_vol", v));
         swGlassHc.setOnCheckedChangeListener((b, v) -> write("fixow_glass_hc", v));
+        swLock.setOnCheckedChangeListener((b, v) -> write("fixow_sw_lock", v));
 
         seedBg();
 

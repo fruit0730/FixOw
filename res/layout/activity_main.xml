@@ -40,11 +40,43 @@
             android:textSize="15sp" />
 
         <Switch
-            android:id="@+id/sw_glass_cc"
+            android:id="@+id/sw_tiles"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="@string/sw_glass_cc"
+            android:text="@string/sw_tiles"
+            android:textSize="15sp" />
+
+        <Switch
+            android:id="@+id/sw_bg"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_bg"
+            android:textSize="15sp" />
+
+        <Switch
+            android:id="@+id/sw_notif"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_notif"
+            android:textSize="15sp" />
+
+        <Switch
+            android:id="@+id/sw_detail"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_detail"
+            android:textSize="15sp" />
+
+        <Switch
+            android:id="@+id/sw_vol"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_vol"
             android:textSize="15sp" />
 
         <Switch
@@ -53,6 +85,14 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="@string/sw_glass_hc"
+            android:textSize="15sp" />
+
+        <Switch
+            android:id="@+id/sw_lock"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_lock"
             android:textSize="15sp" />
 
         <Button

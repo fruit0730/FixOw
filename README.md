@@ -65,7 +65,12 @@ adb shell pm grant cn.classfruit.fixow android.permission.WRITE_SECURE_SETTINGS
 | --- | --- |
 | `fixow_bypass` | 通知白名单解除（默认 1） |
 | `fixow_icon` | 通知图标兜底（默认 1） |
-| `fixow_glass_cc` | 控制中心/通知/音量/锁屏玻璃（默认 1） |
+| `fixow_sw_tiles` | 控制中心磁贴玻璃（默认 1） |
+| `fixow_sw_bg` | 面板模糊背景（默认 1） |
+| `fixow_sw_notif` | 通知中心卡片玻璃（默认 1） |
+| `fixow_sw_detail` | 通知详情卡片玻璃（默认 1） |
+| `fixow_sw_vol` | 音量条玻璃（默认 1） |
+| `fixow_sw_lock` | 锁屏键盘玻璃（默认 1） |
 | `fixow_glass_hc` | 健康中心玻璃（默认 1） |
 | `fixow_bg` | 背景照片（Base64 JPEG） |
 | `fixow_blur` | 模糊强度（默认 16） |
