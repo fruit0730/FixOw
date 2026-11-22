@@ -95,6 +95,14 @@
             android:text="@string/sw_lock"
             android:textSize="15sp" />
 
+        <Switch
+            android:id="@+id/sw_lock_bg"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sw_lock_bg"
+            android:textSize="15sp" />
+
         <Button
             android:id="@+id/btn_bg"
             android:layout_width="match_parent"

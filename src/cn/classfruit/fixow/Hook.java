@@ -473,26 +473,35 @@ public class Hook implements IXposedHookLoadPackage {
                     g.postDelayed(new Runnable() {
                         @Override
                         public void run() {
-                            if (!on("fixow_sw_lock")) return;
-                            stylePinChildren(g, 0);
+                            boolean lock = on("fixow_sw_lock");
+                            boolean lockBg = on("fixow_sw_lock_bg");
+                            if (!lock && !lockBg) return;
+                            if (lock) stylePinChildren(g, 0);
                             try {
                                 View root = g;
                                 ViewParent par;
                                 while ((par = root.getParent()) instanceof View) root = (View) par;
-                                Drawable clear = new ColorDrawable(0x00000000);
-                                List<View> all = new ArrayList<>();
-                                collectAll(root, all);
-                                for (View cv : all) {
-                                    if (cv.getBackground() instanceof GlassDrawable) continue;
-                                    String cn = cv.getClass().getName();
-                                    if (cn.startsWith("com.heytap.wearable.keyguard")
-                                            || cn.equals("android.view.View")
-                                            || cn.equals("android.widget.FrameLayout")
-                                            || cn.equals("android.widget.RelativeLayout")
-                                            || cn.equals("android.widget.LinearLayout")
-                                            || cn.contains("CustomKeyguardPINView")
-                                            || cn.contains("ColorNumericKeyboard")) {
-                                        cv.setBackground(clear);
+                                if (lockBg) {
+                                    Bitmap base = photoBase();
+                                    if (base != null) base = blur(base, blurRadius());
+                                    if (base == null) base = wallpaperBlur();
+                                    if (base == null) base = frostBase();
+                                    root.setBackground(new GlassDrawable(base, 0, glassStyle()));
+                                    Drawable clear = new ColorDrawable(0x00000000);
+                                    List<View> all = new ArrayList<>();
+                                    collectAll(root, all);
+                                    for (View cv : all) {
+                                        if (cv.getBackground() instanceof GlassDrawable) continue;
+                                        String cn = cv.getClass().getName();
+                                        if (cn.startsWith("com.heytap.wearable.keyguard")
+                                                || cn.equals("android.view.View")
+                                                || cn.equals("android.widget.FrameLayout")
+                                                || cn.equals("android.widget.RelativeLayout")
+                                                || cn.equals("android.widget.LinearLayout")
+                                                || cn.contains("CustomKeyguardPINView")
+                                                || cn.contains("ColorNumericKeyboard")) {
+                                            cv.setBackground(clear);
+                                        }
                                     }
                                 }
                             } catch (Throwable t) {
